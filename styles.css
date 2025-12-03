@@ -27,9 +27,34 @@ body {
 .clock {
     font-size: 1.5rem;
     opacity: 0.6;
-    margin-bottom: 30px;
+    margin-bottom: 15px;
     font-variant-numeric: tabular-nums;
     letter-spacing: 2px;
+}
+
+/* Task Input */
+.task-input {
+    width: 100%;
+    max-width: 280px;
+    padding: 12px 16px;
+    font-size: 1rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 25px;
+    color: #fff;
+    text-align: center;
+    outline: none;
+    margin-bottom: 20px;
+    transition: all 0.2s ease;
+}
+
+.task-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.task-input:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Timer Container */
