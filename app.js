@@ -1,6 +1,7 @@
 // DOM Elements
 const clockEl = document.getElementById('clock');
 const timeInput = document.getElementById('timeInput');
+const taskInput = document.getElementById('taskInput');
 const progressEl = document.getElementById('progress');
 const handleEl = document.getElementById('handle');
 const startBtn = document.getElementById('startBtn');
@@ -9,7 +10,8 @@ const presets = document.querySelectorAll('.preset');
 
 // Constants
 const MAX_TIME = 60 * 60; // 60 minutes in seconds
-const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 90; // 565.48
+const CIRCLE_RADIUS = 90;
+const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS; // 565.48
 
 // State
 let totalSeconds = 25 * 60; // Default 25 minutes
@@ -24,8 +26,36 @@ function init() {
     setInterval(updateClock, 1000);
     updateDisplay();
     updateProgress();
+    updatePresetHighlight();
     registerServiceWorker();
     setupEventListeners();
+    loadState();
+}
+
+// Load saved state from localStorage
+function loadState() {
+    try {
+        const saved = localStorage.getItem('pomodoroState');
+        if (saved) {
+            const state = JSON.parse(saved);
+            if (state.taskName) {
+                taskInput.value = state.taskName;
+            }
+        }
+    } catch (e) {
+        console.log('Failed to load state:', e);
+    }
+}
+
+// Save state to localStorage
+function saveState() {
+    try {
+        localStorage.setItem('pomodoroState', JSON.stringify({
+            taskName: taskInput.value
+        }));
+    } catch (e) {
+        console.log('Failed to save state:', e);
+    }
 }
 
 // Register Service Worker
@@ -70,37 +100,29 @@ function updateDisplay() {
 }
 
 // Update progress circle and handle position
+// SVG is rotated -90deg via CSS, so SVG angle 0 = screen 12 o'clock
 function updateProgress() {
+    // Progress: 0 (empty) to 1 (full circle)
     const progress = remainingSeconds / MAX_TIME;
+
+    // Stroke offset: 0 = full circle shown, CIRCUMFERENCE = none shown
     const offset = CIRCLE_CIRCUMFERENCE * (1 - progress);
     progressEl.style.strokeDashoffset = offset;
 
-    // Update handle position
-    const angle = progress * 2 * Math.PI - Math.PI / 2;
-    const cx = 100 + 90 * Math.cos(angle);
-    const cy = 100 + 90 * Math.sin(angle);
+    // Handle position in SVG coordinates
+    // SVG angle 0 (right) = screen 12 o'clock (due to -90deg rotation)
+    // Clockwise: 0° → 90° → 180° → 270° → 360°
+    //            12시 → 3시 → 6시 → 9시 → 12시
+    const svgAngle = progress * 2 * Math.PI;
+    const cx = 100 + CIRCLE_RADIUS * Math.cos(svgAngle);
+    const cy = 100 + CIRCLE_RADIUS * Math.sin(svgAngle);
+
     handleEl.setAttribute('cx', cx);
     handleEl.setAttribute('cy', cy);
 }
 
-// Set time from angle
-function setTimeFromAngle(angle) {
-    // Normalize angle to 0-2PI, starting from top (12 o'clock)
-    let normalizedAngle = angle + Math.PI / 2;
-    if (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
-    if (normalizedAngle > 2 * Math.PI) normalizedAngle -= 2 * Math.PI;
-
-    const progress = normalizedAngle / (2 * Math.PI);
-    const newSeconds = Math.round(progress * MAX_TIME / 60) * 60; // Round to nearest minute
-
-    totalSeconds = Math.max(60, Math.min(newSeconds, MAX_TIME)); // Min 1 minute
-    remainingSeconds = totalSeconds;
-    updateDisplay();
-    updateProgress();
-    updatePresetHighlight();
-}
-
-// Calculate angle from pointer position
+// Calculate SVG angle from pointer position
+// Returns angle in SVG coordinate system (0 = right, before CSS rotation)
 function getAngleFromEvent(e, svg) {
     const rect = svg.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -109,7 +131,35 @@ function getAngleFromEvent(e, svg) {
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    return Math.atan2(clientY - centerY, clientX - centerX);
+    // Screen angle (atan2 gives angle where right=0, down=π/2)
+    const screenAngle = Math.atan2(clientY - centerY, clientX - centerX);
+
+    // Convert screen angle to SVG angle
+    // Screen 12 o'clock (-π/2) should map to SVG angle 0
+    // SVG angle = screen angle + π/2
+    const svgAngle = screenAngle + Math.PI / 2;
+
+    return svgAngle;
+}
+
+// Set time from SVG angle
+function setTimeFromAngle(svgAngle) {
+    // Normalize angle to 0-2π
+    let normalizedAngle = svgAngle;
+    while (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
+    while (normalizedAngle >= 2 * Math.PI) normalizedAngle -= 2 * Math.PI;
+
+    // Convert angle to time (full circle = 60 minutes)
+    const progress = normalizedAngle / (2 * Math.PI);
+    const newSeconds = Math.round(progress * MAX_TIME / 60) * 60; // Round to nearest minute
+
+    // Minimum 1 minute, handle edge case where 0 should be 60
+    totalSeconds = newSeconds === 0 ? MAX_TIME : Math.max(60, newSeconds);
+    remainingSeconds = totalSeconds;
+
+    updateDisplay();
+    updateProgress();
+    updatePresetHighlight();
 }
 
 // Update preset button highlight
@@ -165,6 +215,19 @@ function finishTimer() {
 
     // Play notification sound and vibrate
     playNotification();
+
+    // Show notification if permitted
+    showNotification();
+}
+
+function showNotification() {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        const taskName = taskInput.value.trim() || '타이머';
+        new Notification('Pomodoro 완료!', {
+            body: `${taskName} 완료되었습니다.`,
+            icon: 'icon-192.png'
+        });
+    }
 }
 
 function playNotification() {
@@ -235,7 +298,7 @@ function setupEventListeners() {
 
     timeInput.addEventListener('blur', () => {
         const parsed = parseTime(timeInput.value);
-        if (parsed !== null) {
+        if (parsed !== null && parsed > 0) {
             totalSeconds = parsed;
             remainingSeconds = parsed;
             updateProgress();
@@ -257,6 +320,14 @@ function setupEventListeners() {
         }
     });
 
+    // Task input - save on change
+    taskInput.addEventListener('blur', saveState);
+    taskInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            taskInput.blur();
+        }
+    });
+
     // Control buttons
     startBtn.addEventListener('click', toggleTimer);
     resetBtn.addEventListener('click', resetTimer);
@@ -274,6 +345,13 @@ function setupEventListeners() {
             }
         });
     });
+
+    // Request notification permission on first interaction
+    document.body.addEventListener('click', () => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }, { once: true });
 }
 
 function startDrag(e) {

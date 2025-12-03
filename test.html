@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timer Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 20px;
+        }
+        .test-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+        .test-box {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        h3 { color: #e94560; margin-bottom: 15px; }
+        .svg-container {
+            width: 200px;
+            height: 200px;
+            margin: 10px 0;
+        }
+        svg { width: 100%; height: 100%; }
+        .timer-bg { fill: none; stroke: rgba(255,255,255,0.2); stroke-width: 6; }
+        .timer-progress { fill: none; stroke: #e94560; stroke-width: 6; stroke-linecap: round; }
+        .timer-handle { fill: #fff; }
+        .rotated { transform: rotate(-90deg); }
+        button {
+            background: #e94560;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .log {
+            background: #000;
+            padding: 10px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .controls { margin: 20px 0; }
+        input[type="range"] { width: 200px; }
+        .label { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Timer Debug Test</h1>
+
+    <div class="controls">
+        <div class="label">시간 설정: <span id="timeLabel">25</span>분</div>
+        <input type="range" id="timeSlider" min="1" max="60" value="25">
+        <div class="label">남은 시간: <span id="remainLabel">25</span>분</div>
+        <input type="range" id="remainSlider" min="0" max="60" value="25">
+    </div>
+
+    <div class="test-container">
+        <!-- Test 1: No rotation -->
+        <div class="test-box">
+            <h3>1. 회전 없음 (원본)</h3>
+            <div class="svg-container">
+                <svg viewBox="0 0 200 200">
+                    <circle class="timer-bg" cx="100" cy="100" r="90"/>
+                    <circle class="timer-progress" cx="100" cy="100" r="90" id="prog1"
+                        stroke-dasharray="565.48" stroke-dashoffset="0"/>
+                    <circle class="timer-handle" cx="190" cy="100" r="10" id="handle1"/>
+                    <text x="100" y="15" fill="#666" text-anchor="middle" font-size="12">0°(3시)</text>
+                    <text x="100" y="195" fill="#666" text-anchor="middle" font-size="12">180°(9시)</text>
+                </svg>
+            </div>
+            <div>핸들: SVG angle 0 = 오른쪽(3시)</div>
+        </div>
+
+        <!-- Test 2: With rotation (current) -->
+        <div class="test-box">
+            <h3>2. rotate(-90deg) 적용</h3>
+            <div class="svg-container">
+                <svg viewBox="0 0 200 200" class="rotated">
+                    <circle class="timer-bg" cx="100" cy="100" r="90"/>
+                    <circle class="timer-progress" cx="100" cy="100" r="90" id="prog2"
+                        stroke-dasharray="565.48" stroke-dashoffset="0"/>
+                    <circle class="timer-handle" cx="190" cy="100" r="10" id="handle2"/>
+                </svg>
+            </div>
+            <div>핸들: SVG angle 0 → 화면 12시</div>
+        </div>
+
+        <!-- Test 3: Current buggy behavior -->
+        <div class="test-box">
+            <h3>3. 현재 버그 코드</h3>
+            <div class="svg-container">
+                <svg viewBox="0 0 200 200" class="rotated">
+                    <circle class="timer-bg" cx="100" cy="100" r="90"/>
+                    <circle class="timer-progress" cx="100" cy="100" r="90" id="prog3"
+                        stroke-dasharray="565.48" stroke-dashoffset="0"/>
+                    <circle class="timer-handle" cx="100" cy="10" r="10" id="handle3"/>
+                </svg>
+            </div>
+            <div id="bug-info">버그: angle = progress*2π - π/2</div>
+        </div>
+
+        <!-- Test 4: Fixed behavior -->
+        <div class="test-box">
+            <h3>4. 수정된 코드</h3>
+            <div class="svg-container">
+                <svg viewBox="0 0 200 200" class="rotated">
+                    <circle class="timer-bg" cx="100" cy="100" r="90"/>
+                    <circle class="timer-progress" cx="100" cy="100" r="90" id="prog4"
+                        stroke-dasharray="565.48" stroke-dashoffset="0"/>
+                    <circle class="timer-handle" cx="190" cy="100" r="10" id="handle4"/>
+                </svg>
+            </div>
+            <div id="fix-info">수정: SVG angle = remain/MAX * 2π</div>
+        </div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        const MAX_TIME = 60 * 60;
+        const CIRCUMFERENCE = 2 * Math.PI * 90;
+
+        const timeSlider = document.getElementById('timeSlider');
+        const remainSlider = document.getElementById('remainSlider');
+        const timeLabel = document.getElementById('timeLabel');
+        const remainLabel = document.getElementById('remainLabel');
+        const logEl = document.getElementById('log');
+
+        function log(msg) {
+            logEl.innerHTML = msg + '<br>' + logEl.innerHTML;
+        }
+
+        function updateAll() {
+            const totalMin = parseInt(timeSlider.value);
+            const remainMin = parseInt(remainSlider.value);
+            const totalSec = totalMin * 60;
+            const remainSec = remainMin * 60;
+
+            timeLabel.textContent = totalMin;
+            remainLabel.textContent = remainMin;
+
+            // Progress offset (how much to hide)
+            const progress = remainSec / MAX_TIME;
+            const offset = CIRCUMFERENCE * (1 - progress);
+
+            // === Test 3: Current buggy code ===
+            const bugAngle = progress * 2 * Math.PI - Math.PI / 2;
+            const bugCx = 100 + 90 * Math.cos(bugAngle);
+            const bugCy = 100 + 90 * Math.sin(bugAngle);
+
+            document.getElementById('handle3').setAttribute('cx', bugCx);
+            document.getElementById('handle3').setAttribute('cy', bugCy);
+            document.getElementById('prog3').style.strokeDashoffset = offset;
+            document.getElementById('bug-info').textContent =
+                `버그: angle=${(bugAngle*180/Math.PI).toFixed(0)}° (${bugCx.toFixed(0)},${bugCy.toFixed(0)})`;
+
+            // === Test 4: Fixed code ===
+            const fixAngle = (remainSec / MAX_TIME) * 2 * Math.PI;
+            const fixCx = 100 + 90 * Math.cos(fixAngle);
+            const fixCy = 100 + 90 * Math.sin(fixAngle);
+
+            document.getElementById('handle4').setAttribute('cx', fixCx);
+            document.getElementById('handle4').setAttribute('cy', fixCy);
+            document.getElementById('prog4').style.strokeDashoffset = offset;
+            document.getElementById('fix-info').textContent =
+                `수정: angle=${(fixAngle*180/Math.PI).toFixed(0)}° (${fixCx.toFixed(0)},${fixCy.toFixed(0)})`;
+
+            // Test 1 & 2 - static reference
+            document.getElementById('handle1').setAttribute('cx', fixCx);
+            document.getElementById('handle1').setAttribute('cy', fixCy);
+            document.getElementById('prog1').style.strokeDashoffset = offset;
+
+            document.getElementById('handle2').setAttribute('cx', fixCx);
+            document.getElementById('handle2').setAttribute('cy', fixCy);
+            document.getElementById('prog2').style.strokeDashoffset = offset;
+
+            log(`[${remainMin}분] 버그: ${(bugAngle*180/Math.PI).toFixed(0)}° | 수정: ${(fixAngle*180/Math.PI).toFixed(0)}°`);
+        }
+
+        timeSlider.addEventListener('input', () => {
+            remainSlider.max = timeSlider.value;
+            if (parseInt(remainSlider.value) > parseInt(timeSlider.value)) {
+                remainSlider.value = timeSlider.value;
+            }
+            updateAll();
+        });
+
+        remainSlider.addEventListener('input', updateAll);
+
+        // Initial update
+        updateAll();
+
+        console.log('=== Timer Debug Tests ===');
+        console.log('SVG rotate(-90deg) transforms:');
+        console.log('  SVG (190, 100) = angle 0° → Screen 12시');
+        console.log('  SVG (100, 190) = angle 90° → Screen 3시');
+        console.log('  SVG (10, 100) = angle 180° → Screen 6시');
+        console.log('  SVG (100, 10) = angle 270° → Screen 9시');
+    </script>
+</body>
+</html>
