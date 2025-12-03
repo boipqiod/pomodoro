@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="description" content="Simple Pomodoro Timer - Offline PWA">
+    <title>Pomodoro Timer</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Current Time -->
+        <div class="clock" id="clock">00:00:00</div>
+
+        <!-- Timer Circle -->
+        <div class="timer-container">
+            <svg class="timer-svg" viewBox="0 0 200 200">
+                <circle class="timer-bg" cx="100" cy="100" r="90"/>
+                <circle class="timer-progress" cx="100" cy="100" r="90" id="progress"/>
+                <circle class="timer-handle" cx="100" cy="10" r="12" id="handle"/>
+            </svg>
+            <div class="timer-display">
+                <input type="text" id="timeInput" class="time-input" value="25:00" maxlength="5">
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button id="startBtn" class="btn btn-start">시작</button>
+            <button id="resetBtn" class="btn btn-reset">리셋</button>
+        </div>
+
+        <!-- Presets -->
+        <div class="presets">
+            <button class="preset" data-time="5">5분</button>
+            <button class="preset" data-time="15">15분</button>
+            <button class="preset" data-time="25">25분</button>
+            <button class="preset" data-time="45">45분</button>
+            <button class="preset" data-time="60">60분</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
