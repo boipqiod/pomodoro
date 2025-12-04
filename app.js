@@ -256,6 +256,8 @@ function startTimer() {
     isRunning = true;
     startBtn.textContent = '일시정지';
     startBtn.classList.add('running');
+    resetBtn.textContent = '완료';
+    resetBtn.classList.add('finish-early');
     progressEl.classList.remove('finished');
 
     // Disable task input while running
@@ -387,6 +389,8 @@ function finishSession() {
     remainingSeconds = totalSeconds;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
+    resetBtn.textContent = '리셋';
+    resetBtn.classList.remove('finish-early');
     progressEl.classList.remove('finished');
     updateDisplay();
     updateProgress();
@@ -478,6 +482,8 @@ function resetTimer() {
     remainingSeconds = totalSeconds;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
+    resetBtn.textContent = '리셋';
+    resetBtn.classList.remove('finish-early');
     progressEl.classList.remove('finished');
     taskInput.disabled = false;
     updateDisplay();
