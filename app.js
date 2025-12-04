@@ -9,6 +9,19 @@ const resetBtn = document.getElementById('resetBtn');
 const presets = document.querySelectorAll('.preset');
 const historyList = document.getElementById('historyList');
 
+// Backlog Elements
+const backlogList = document.getElementById('backlogList');
+const backlogTaskInput = document.getElementById('backlogTaskInput');
+const backlogTimeSelect = document.getElementById('backlogTimeSelect');
+const backlogAddBtn = document.getElementById('backlogAddBtn');
+
+// Archive Elements
+const viewArchiveBtn = document.getElementById('viewArchiveBtn');
+const archiveModal = document.getElementById('archiveModal');
+const archiveList = document.getElementById('archiveList');
+const closeArchiveModal = document.getElementById('closeArchiveModal');
+const clearAllHistoryBtn = document.getElementById('clearAllHistoryBtn');
+
 // Modal Elements
 const timerModal = document.getElementById('timerModal');
 const historyModal = document.getElementById('historyModal');
@@ -33,24 +46,84 @@ let remainingSeconds = totalSeconds;
 let isRunning = false;
 let timerInterval = null;
 let isDragging = false;
+let targetEndTime = null; // Target end timestamp for accurate background timing
 
 // Session tracking
 let sessionStartTime = null;
 let pauseStartTime = null;
 let totalPausedTime = 0; // Total paused time in milliseconds
 let workHistory = [];
+let taskBacklog = [];
+let currentBacklogTaskId = null; // Track which backlog task is being worked on
 
 // Initialize
 function init() {
     updateClock();
     setInterval(updateClock, 1000);
-    updateDisplay();
-    updateProgress();
-    updatePresetHighlight();
     registerServiceWorker();
     setupEventListeners();
     loadState();
-    renderHistory();
+    renderBacklog();
+    renderTodayHistory();
+
+    // Try to restore timer state from localStorage
+    const timerState = loadTimerState();
+
+    if (timerState === true) {
+        // Timer was running - resume it
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+        resumeTimerFromState();
+    } else if (timerState === 'finished') {
+        // Timer finished while in background - show completion
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+        finishTimer();
+    } else if (timerState === 'paused') {
+        // Timer was paused - restore paused UI
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+        restorePausedState();
+    } else {
+        // No saved timer state - normal init
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+    }
+}
+
+// Resume timer from saved state
+function resumeTimerFromState() {
+    isRunning = true;
+    startBtn.textContent = '일시정지';
+    startBtn.classList.add('running');
+    resetBtn.textContent = '완료';
+    resetBtn.classList.add('finish-early');
+    taskInput.disabled = true;
+
+    timerInterval = setInterval(() => {
+        const now = Date.now();
+        remainingSeconds = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
+        updateDisplay();
+        updateProgress();
+
+        if (remainingSeconds <= 0) {
+            finishTimer();
+        }
+    }, 1000);
+}
+
+// Restore paused timer UI
+function restorePausedState() {
+    if (sessionStartTime !== null) {
+        startBtn.textContent = '계속';
+        resetBtn.textContent = '완료';
+        resetBtn.classList.add('finish-early');
+        taskInput.disabled = true;
+    }
 }
 
 // Load saved state from localStorage
@@ -65,6 +138,9 @@ function loadState() {
             if (state.workHistory) {
                 workHistory = state.workHistory;
             }
+            if (state.taskBacklog) {
+                taskBacklog = state.taskBacklog;
+            }
         }
     } catch (e) {
         console.log('Failed to load state:', e);
@@ -76,10 +152,103 @@ function saveState() {
     try {
         localStorage.setItem('pomodoroState', JSON.stringify({
             taskName: taskInput.value,
-            workHistory: workHistory
+            workHistory: workHistory,
+            taskBacklog: taskBacklog
         }));
     } catch (e) {
         console.log('Failed to save state:', e);
+    }
+}
+
+// Save timer state for background/refresh recovery
+function saveTimerState() {
+    try {
+        localStorage.setItem('pomodoroTimerState', JSON.stringify({
+            targetEndTime: targetEndTime,
+            totalSeconds: totalSeconds,
+            remainingSeconds: remainingSeconds,
+            isRunning: isRunning,
+            sessionStartTime: sessionStartTime ? sessionStartTime.toISOString() : null,
+            pauseStartTime: pauseStartTime,
+            totalPausedTime: totalPausedTime,
+            taskName: taskInput.value,
+            currentBacklogTaskId: currentBacklogTaskId
+        }));
+    } catch (e) {
+        console.log('Failed to save timer state:', e);
+    }
+}
+
+// Load timer state from localStorage
+function loadTimerState() {
+    try {
+        const saved = localStorage.getItem('pomodoroTimerState');
+        if (!saved) return false;
+
+        const state = JSON.parse(saved);
+
+        // If there was a running timer
+        if (state.targetEndTime && state.isRunning) {
+            const now = Date.now();
+            const remaining = Math.ceil((state.targetEndTime - now) / 1000);
+
+            if (remaining > 0) {
+                // Timer still has time left - restore it
+                targetEndTime = state.targetEndTime;
+                totalSeconds = state.totalSeconds;
+                remainingSeconds = remaining;
+                sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
+                totalPausedTime = state.totalPausedTime || 0;
+                currentBacklogTaskId = state.currentBacklogTaskId || null;
+
+                if (state.taskName) {
+                    taskInput.value = state.taskName;
+                }
+
+                return true; // Signal to resume timer
+            } else {
+                // Timer has already finished while in background
+                totalSeconds = state.totalSeconds;
+                remainingSeconds = 0;
+                sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
+                totalPausedTime = state.totalPausedTime || 0;
+                currentBacklogTaskId = state.currentBacklogTaskId || null;
+
+                if (state.taskName) {
+                    taskInput.value = state.taskName;
+                }
+
+                return 'finished'; // Signal that timer finished in background
+            }
+        } else if (state.remainingSeconds !== undefined && !state.isRunning) {
+            // Timer was paused - restore paused state
+            totalSeconds = state.totalSeconds;
+            remainingSeconds = state.remainingSeconds;
+            sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
+            pauseStartTime = state.pauseStartTime;
+            totalPausedTime = state.totalPausedTime || 0;
+            currentBacklogTaskId = state.currentBacklogTaskId || null;
+
+            if (state.taskName) {
+                taskInput.value = state.taskName;
+            }
+
+            return 'paused'; // Signal paused state
+        }
+
+        return false;
+    } catch (e) {
+        console.log('Failed to load timer state:', e);
+        return false;
+    }
+}
+
+// Clear timer state from localStorage
+function clearTimerState() {
+    try {
+        localStorage.removeItem('pomodoroTimerState');
+    } catch (e) {
+        console.log('Failed to clear timer state:', e);
     }
 }
 
@@ -263,8 +432,14 @@ function startTimer() {
     // Disable task input while running
     taskInput.disabled = true;
 
+    // Set target end time for accurate background timing
+    targetEndTime = Date.now() + remainingSeconds * 1000;
+    saveTimerState();
+
     timerInterval = setInterval(() => {
-        remainingSeconds--;
+        // Calculate remaining time from target end time
+        const now = Date.now();
+        remainingSeconds = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
         updateDisplay();
         updateProgress();
 
@@ -277,17 +452,21 @@ function startTimer() {
 function pauseTimer() {
     isRunning = false;
     pauseStartTime = Date.now();
+    targetEndTime = null; // Clear target end time on pause
     startBtn.textContent = '계속';
     startBtn.classList.remove('running');
     clearInterval(timerInterval);
+    saveTimerState();
 }
 
 function finishTimer() {
     isRunning = false;
     clearInterval(timerInterval);
+    targetEndTime = null;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
     progressEl.classList.add('finished');
+    clearTimerState();
 
     // Play notification sound and vibrate
     playNotification();
@@ -371,15 +550,22 @@ function finishSession() {
     // Add to history
     workHistory.unshift(historyEntry);
 
-    // Keep only last 50 entries
-    if (workHistory.length > 50) {
-        workHistory = workHistory.slice(0, 50);
+    // Keep only last 100 entries
+    if (workHistory.length > 100) {
+        workHistory = workHistory.slice(0, 100);
+    }
+
+    // Remove completed backlog task
+    if (currentBacklogTaskId) {
+        taskBacklog = taskBacklog.filter(t => t.id !== currentBacklogTaskId);
+        currentBacklogTaskId = null;
     }
 
     // Reset session
     sessionStartTime = null;
     pauseStartTime = null;
     totalPausedTime = 0;
+    targetEndTime = null;
 
     // Reset task name
     taskInput.value = '';
@@ -397,26 +583,45 @@ function finishSession() {
 
     // Save and render
     saveState();
-    renderHistory();
+    clearTimerState();
+    renderBacklog();
+    renderTodayHistory();
 }
 
-function renderHistory() {
-    if (workHistory.length === 0) {
-        historyList.innerHTML = '<div class="history-empty">아직 완료된 작업이 없습니다</div>';
+// Get today's date string (YYYY-MM-DD)
+function getDateString(date) {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Get today's history items
+function getTodayHistory() {
+    const today = getDateString(new Date());
+    return workHistory.filter(item => getDateString(item.startTime) === today);
+}
+
+// Render today's completed tasks
+function renderTodayHistory() {
+    const todayItems = getTodayHistory();
+
+    if (todayItems.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">오늘 완료된 작업이 없습니다</div>';
         return;
     }
 
-    historyList.innerHTML = workHistory.map((item, index) => `
+    historyList.innerHTML = todayItems.map((item) => {
+        const index = workHistory.findIndex(h => h.id === item.id);
+        return `
         <div class="history-item" data-index="${index}">
             <div class="history-item-header">
                 <span class="history-item-name">${escapeHtml(item.taskName)}</span>
                 <span class="history-item-duration">${formatDuration(item.workTime)}</span>
             </div>
             <div class="history-item-time">
-                ${formatDate(item.startTime)} ~ ${formatDateTime(item.endTime)}
+                ${formatDateTime(item.startTime)} ~ ${formatDateTime(item.endTime)}
             </div>
         </div>
-    `).join('');
+    `}).join('');
 
     // Add click listeners
     historyList.querySelectorAll('.history-item').forEach(el => {
@@ -425,6 +630,188 @@ function renderHistory() {
             showHistoryDetailModal(workHistory[index]);
         });
     });
+}
+
+// Render backlog list
+function renderBacklog() {
+    if (taskBacklog.length === 0) {
+        backlogList.innerHTML = '<div class="backlog-empty">등록된 작업이 없습니다</div>';
+        return;
+    }
+
+    backlogList.innerHTML = taskBacklog.map((item) => `
+        <div class="backlog-item" data-id="${item.id}">
+            <span class="backlog-item-name">${escapeHtml(item.name)}</span>
+            <span class="backlog-item-time">${item.minutes}분</span>
+            <button class="backlog-item-delete" data-id="${item.id}">&times;</button>
+        </div>
+    `).join('');
+
+    // Add click listeners for starting task
+    backlogList.querySelectorAll('.backlog-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.classList.contains('backlog-item-delete')) return;
+            const id = parseInt(el.dataset.id, 10);
+            startBacklogTask(id);
+        });
+    });
+
+    // Add click listeners for delete buttons
+    backlogList.querySelectorAll('.backlog-item-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = parseInt(btn.dataset.id, 10);
+            deleteBacklogTask(id);
+        });
+    });
+}
+
+// Add task to backlog
+function addBacklogTask() {
+    const name = backlogTaskInput.value.trim();
+    const minutes = parseInt(backlogTimeSelect.value, 10);
+
+    if (!name) {
+        backlogTaskInput.focus();
+        return;
+    }
+
+    const task = {
+        id: Date.now(),
+        name: name,
+        minutes: minutes
+    };
+
+    taskBacklog.push(task);
+    saveState();
+    renderBacklog();
+
+    // Clear input
+    backlogTaskInput.value = '';
+}
+
+// Delete task from backlog
+function deleteBacklogTask(id) {
+    taskBacklog = taskBacklog.filter(t => t.id !== id);
+    saveState();
+    renderBacklog();
+}
+
+// Start a backlog task
+function startBacklogTask(id) {
+    if (isRunning) {
+        if (!confirm('현재 진행 중인 타이머가 있습니다. 새 작업을 시작하시겠습니까?')) {
+            return;
+        }
+        // Stop current timer without saving to history
+        clearInterval(timerInterval);
+        isRunning = false;
+    }
+
+    const task = taskBacklog.find(t => t.id === id);
+    if (!task) return;
+
+    // Set timer
+    taskInput.value = task.name;
+    totalSeconds = task.minutes * 60;
+    remainingSeconds = totalSeconds;
+    currentBacklogTaskId = id;
+
+    updateDisplay();
+    updateProgress();
+    updatePresetHighlight();
+
+    // Start timer
+    startTimer();
+}
+
+// Remove completed backlog task
+function removeCompletedBacklogTask() {
+    if (currentBacklogTaskId) {
+        taskBacklog = taskBacklog.filter(t => t.id !== currentBacklogTaskId);
+        currentBacklogTaskId = null;
+        saveState();
+        renderBacklog();
+    }
+}
+
+// Show archive modal
+function showArchiveModal() {
+    renderArchive();
+    archiveModal.classList.add('active');
+}
+
+// Hide archive modal
+function hideArchiveModal() {
+    archiveModal.classList.remove('active');
+}
+
+// Render archive (grouped by date)
+function renderArchive() {
+    if (workHistory.length === 0) {
+        archiveList.innerHTML = '<div class="archive-empty">작업 기록이 없습니다</div>';
+        return;
+    }
+
+    // Group by date
+    const grouped = {};
+    workHistory.forEach(item => {
+        const dateStr = getDateString(item.startTime);
+        if (!grouped[dateStr]) {
+            grouped[dateStr] = [];
+        }
+        grouped[dateStr].push(item);
+    });
+
+    // Sort dates descending
+    const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+    archiveList.innerHTML = sortedDates.map(dateStr => {
+        const items = grouped[dateStr];
+        const d = new Date(dateStr);
+        const today = getDateString(new Date());
+        const yesterday = getDateString(new Date(Date.now() - 86400000));
+
+        let dateLabel;
+        if (dateStr === today) {
+            dateLabel = '오늘';
+        } else if (dateStr === yesterday) {
+            dateLabel = '어제';
+        } else {
+            dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+        }
+
+        const totalWork = items.reduce((sum, item) => sum + item.workTime, 0);
+
+        return `
+            <div class="archive-date-group">
+                <div class="archive-date-header">${dateLabel} (${formatDuration(totalWork)})</div>
+                <div class="archive-items">
+                    ${items.map(item => `
+                        <div class="archive-item">
+                            <div class="archive-item-header">
+                                <span class="archive-item-name">${escapeHtml(item.taskName)}</span>
+                                <span class="archive-item-duration">${formatDuration(item.workTime)}</span>
+                            </div>
+                            <div class="archive-item-time">${formatDateTime(item.startTime)} ~ ${formatDateTime(item.endTime)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Clear all history
+function clearAllHistory() {
+    if (workHistory.length === 0) return;
+
+    if (confirm('모든 작업 기록을 삭제하시겠습니까?')) {
+        workHistory = [];
+        saveState();
+        renderTodayHistory();
+        renderArchive();
+    }
 }
 
 function escapeHtml(text) {
@@ -479,6 +866,7 @@ function resetTimer() {
         return;
     }
 
+    targetEndTime = null;
     remainingSeconds = totalSeconds;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
@@ -488,6 +876,7 @@ function resetTimer() {
     taskInput.disabled = false;
     updateDisplay();
     updateProgress();
+    clearTimerState();
 }
 
 // Event Listeners
@@ -590,6 +979,25 @@ function setupEventListeners() {
     // Close history modal
     closeHistoryModal.addEventListener('click', hideHistoryDetailModal);
 
+    // Backlog events
+    backlogAddBtn.addEventListener('click', addBacklogTask);
+    backlogTaskInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            addBacklogTask();
+        }
+    });
+
+    // Archive events
+    viewArchiveBtn.addEventListener('click', showArchiveModal);
+    closeArchiveModal.addEventListener('click', hideArchiveModal);
+    clearAllHistoryBtn.addEventListener('click', clearAllHistory);
+
+    archiveModal.addEventListener('click', (e) => {
+        if (e.target === archiveModal) {
+            hideArchiveModal();
+        }
+    });
+
     // Close modals on overlay click
     timerModal.addEventListener('click', (e) => {
         if (e.target === timerModal) {
@@ -601,6 +1009,21 @@ function setupEventListeners() {
     historyModal.addEventListener('click', (e) => {
         if (e.target === historyModal) {
             hideHistoryDetailModal();
+        }
+    });
+
+    // Handle visibility change (returning from background)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && isRunning && targetEndTime) {
+            // Immediately update timer when returning to foreground
+            const now = Date.now();
+            remainingSeconds = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
+            updateDisplay();
+            updateProgress();
+
+            if (remainingSeconds <= 0) {
+                finishTimer();
+            }
         }
     });
 }
