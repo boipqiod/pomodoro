@@ -34,6 +34,9 @@ let isRunning = false;
 let timerInterval = null;
 let isDragging = false;
 
+// Target-based timer (for background accuracy)
+let targetEndTime = null; // Timestamp when timer should end
+
 // Session tracking
 let sessionStartTime = null;
 let pauseStartTime = null;
@@ -50,6 +53,7 @@ function init() {
     registerServiceWorker();
     setupEventListeners();
     loadState();
+    restoreSession(); // Restore active session if any
     renderHistory();
 }
 
@@ -80,6 +84,92 @@ function saveState() {
         }));
     } catch (e) {
         console.log('Failed to save state:', e);
+    }
+}
+
+// Save active session state for persistence across page reloads/background
+function saveSessionState() {
+    try {
+        if (sessionStartTime === null) {
+            localStorage.removeItem('pomodoroSession');
+            return;
+        }
+        localStorage.setItem('pomodoroSession', JSON.stringify({
+            targetEndTime: targetEndTime,
+            remainingSeconds: remainingSeconds,
+            totalSeconds: totalSeconds,
+            sessionStartTime: sessionStartTime.toISOString(),
+            pauseStartTime: pauseStartTime,
+            totalPausedTime: totalPausedTime,
+            isRunning: isRunning,
+            taskName: taskInput.value
+        }));
+    } catch (e) {
+        console.log('Failed to save session state:', e);
+    }
+}
+
+// Clear session state
+function clearSessionState() {
+    try {
+        localStorage.removeItem('pomodoroSession');
+    } catch (e) {
+        console.log('Failed to clear session state:', e);
+    }
+}
+
+// Restore active session from localStorage
+function restoreSession() {
+    try {
+        const saved = localStorage.getItem('pomodoroSession');
+        if (!saved) return;
+
+        const session = JSON.parse(saved);
+
+        sessionStartTime = new Date(session.sessionStartTime);
+        totalPausedTime = session.totalPausedTime || 0;
+        totalSeconds = session.totalSeconds;
+        taskInput.value = session.taskName || '';
+
+        if (session.isRunning && session.targetEndTime) {
+            // Timer was running - check if it should have finished
+            const now = Date.now();
+            const remaining = Math.ceil((session.targetEndTime - now) / 1000);
+
+            if (remaining <= 0) {
+                // Timer should have finished while away
+                remainingSeconds = 0;
+                updateDisplay();
+                updateProgress();
+                finishTimer();
+            } else {
+                // Timer still has time left - resume
+                remainingSeconds = remaining;
+                targetEndTime = session.targetEndTime;
+                isRunning = true;
+                startBtn.textContent = '일시정지';
+                startBtn.classList.add('running');
+                resetBtn.textContent = '완료';
+                resetBtn.classList.add('finish-early');
+                taskInput.disabled = true;
+                timerInterval = setInterval(timerTick, 100);
+                updateDisplay();
+                updateProgress();
+            }
+        } else if (session.pauseStartTime) {
+            // Timer was paused
+            remainingSeconds = session.remainingSeconds;
+            pauseStartTime = session.pauseStartTime;
+            startBtn.textContent = '계속';
+            resetBtn.textContent = '완료';
+            resetBtn.classList.add('finish-early');
+            taskInput.disabled = true;
+            updateDisplay();
+            updateProgress();
+        }
+    } catch (e) {
+        console.log('Failed to restore session:', e);
+        clearSessionState();
     }
 }
 
@@ -253,6 +343,9 @@ function startTimer() {
         pauseStartTime = null;
     }
 
+    // Set target end time based on remaining seconds
+    targetEndTime = Date.now() + remainingSeconds * 1000;
+
     isRunning = true;
     startBtn.textContent = '일시정지';
     startBtn.classList.add('running');
@@ -263,23 +356,33 @@ function startTimer() {
     // Disable task input while running
     taskInput.disabled = true;
 
-    timerInterval = setInterval(() => {
-        remainingSeconds--;
-        updateDisplay();
-        updateProgress();
+    // Save session state for persistence
+    saveSessionState();
 
-        if (remainingSeconds <= 0) {
-            finishTimer();
-        }
-    }, 1000);
+    timerInterval = setInterval(timerTick, 100); // Check more frequently for accuracy
+}
+
+function timerTick() {
+    const now = Date.now();
+    remainingSeconds = Math.ceil((targetEndTime - now) / 1000);
+
+    if (remainingSeconds <= 0) {
+        remainingSeconds = 0;
+        finishTimer();
+    }
+
+    updateDisplay();
+    updateProgress();
 }
 
 function pauseTimer() {
     isRunning = false;
     pauseStartTime = Date.now();
+    targetEndTime = null; // Clear target since we're paused
     startBtn.textContent = '계속';
     startBtn.classList.remove('running');
     clearInterval(timerInterval);
+    saveSessionState();
 }
 
 function finishTimer() {
@@ -380,6 +483,10 @@ function finishSession() {
     sessionStartTime = null;
     pauseStartTime = null;
     totalPausedTime = 0;
+    targetEndTime = null;
+
+    // Clear session state from storage
+    clearSessionState();
 
     // Reset task name
     taskInput.value = '';
@@ -478,6 +585,9 @@ function resetTimer() {
         finishSession();
         return;
     }
+
+    targetEndTime = null;
+    clearSessionState();
 
     remainingSeconds = totalSeconds;
     startBtn.textContent = '시작';
