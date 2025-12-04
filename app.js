@@ -33,6 +33,7 @@ let remainingSeconds = totalSeconds;
 let isRunning = false;
 let timerInterval = null;
 let isDragging = false;
+let targetEndTime = null; // Target end timestamp for accurate background timing
 
 // Session tracking
 let sessionStartTime = null;
@@ -44,13 +45,69 @@ let workHistory = [];
 function init() {
     updateClock();
     setInterval(updateClock, 1000);
-    updateDisplay();
-    updateProgress();
-    updatePresetHighlight();
     registerServiceWorker();
     setupEventListeners();
     loadState();
     renderHistory();
+
+    // Try to restore timer state from localStorage
+    const timerState = loadTimerState();
+
+    if (timerState === true) {
+        // Timer was running - resume it
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+        resumeTimerFromState();
+    } else if (timerState === 'finished') {
+        // Timer finished while in background - show completion
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+        finishTimer();
+    } else if (timerState === 'paused') {
+        // Timer was paused - restore paused UI
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+        restorePausedState();
+    } else {
+        // No saved timer state - normal init
+        updateDisplay();
+        updateProgress();
+        updatePresetHighlight();
+    }
+}
+
+// Resume timer from saved state
+function resumeTimerFromState() {
+    isRunning = true;
+    startBtn.textContent = '일시정지';
+    startBtn.classList.add('running');
+    resetBtn.textContent = '완료';
+    resetBtn.classList.add('finish-early');
+    taskInput.disabled = true;
+
+    timerInterval = setInterval(() => {
+        const now = Date.now();
+        remainingSeconds = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
+        updateDisplay();
+        updateProgress();
+
+        if (remainingSeconds <= 0) {
+            finishTimer();
+        }
+    }, 1000);
+}
+
+// Restore paused timer UI
+function restorePausedState() {
+    if (sessionStartTime !== null) {
+        startBtn.textContent = '계속';
+        resetBtn.textContent = '완료';
+        resetBtn.classList.add('finish-early');
+        taskInput.disabled = true;
+    }
 }
 
 // Load saved state from localStorage
@@ -80,6 +137,94 @@ function saveState() {
         }));
     } catch (e) {
         console.log('Failed to save state:', e);
+    }
+}
+
+// Save timer state for background/refresh recovery
+function saveTimerState() {
+    try {
+        localStorage.setItem('pomodoroTimerState', JSON.stringify({
+            targetEndTime: targetEndTime,
+            totalSeconds: totalSeconds,
+            remainingSeconds: remainingSeconds,
+            isRunning: isRunning,
+            sessionStartTime: sessionStartTime ? sessionStartTime.toISOString() : null,
+            pauseStartTime: pauseStartTime,
+            totalPausedTime: totalPausedTime,
+            taskName: taskInput.value
+        }));
+    } catch (e) {
+        console.log('Failed to save timer state:', e);
+    }
+}
+
+// Load timer state from localStorage
+function loadTimerState() {
+    try {
+        const saved = localStorage.getItem('pomodoroTimerState');
+        if (!saved) return false;
+
+        const state = JSON.parse(saved);
+
+        // If there was a running timer
+        if (state.targetEndTime && state.isRunning) {
+            const now = Date.now();
+            const remaining = Math.ceil((state.targetEndTime - now) / 1000);
+
+            if (remaining > 0) {
+                // Timer still has time left - restore it
+                targetEndTime = state.targetEndTime;
+                totalSeconds = state.totalSeconds;
+                remainingSeconds = remaining;
+                sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
+                totalPausedTime = state.totalPausedTime || 0;
+
+                if (state.taskName) {
+                    taskInput.value = state.taskName;
+                }
+
+                return true; // Signal to resume timer
+            } else {
+                // Timer has already finished while in background
+                totalSeconds = state.totalSeconds;
+                remainingSeconds = 0;
+                sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
+                totalPausedTime = state.totalPausedTime || 0;
+
+                if (state.taskName) {
+                    taskInput.value = state.taskName;
+                }
+
+                return 'finished'; // Signal that timer finished in background
+            }
+        } else if (state.remainingSeconds !== undefined && !state.isRunning) {
+            // Timer was paused - restore paused state
+            totalSeconds = state.totalSeconds;
+            remainingSeconds = state.remainingSeconds;
+            sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
+            pauseStartTime = state.pauseStartTime;
+            totalPausedTime = state.totalPausedTime || 0;
+
+            if (state.taskName) {
+                taskInput.value = state.taskName;
+            }
+
+            return 'paused'; // Signal paused state
+        }
+
+        return false;
+    } catch (e) {
+        console.log('Failed to load timer state:', e);
+        return false;
+    }
+}
+
+// Clear timer state from localStorage
+function clearTimerState() {
+    try {
+        localStorage.removeItem('pomodoroTimerState');
+    } catch (e) {
+        console.log('Failed to clear timer state:', e);
     }
 }
 
@@ -263,8 +408,14 @@ function startTimer() {
     // Disable task input while running
     taskInput.disabled = true;
 
+    // Set target end time for accurate background timing
+    targetEndTime = Date.now() + remainingSeconds * 1000;
+    saveTimerState();
+
     timerInterval = setInterval(() => {
-        remainingSeconds--;
+        // Calculate remaining time from target end time
+        const now = Date.now();
+        remainingSeconds = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
         updateDisplay();
         updateProgress();
 
@@ -277,17 +428,21 @@ function startTimer() {
 function pauseTimer() {
     isRunning = false;
     pauseStartTime = Date.now();
+    targetEndTime = null; // Clear target end time on pause
     startBtn.textContent = '계속';
     startBtn.classList.remove('running');
     clearInterval(timerInterval);
+    saveTimerState();
 }
 
 function finishTimer() {
     isRunning = false;
     clearInterval(timerInterval);
+    targetEndTime = null;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
     progressEl.classList.add('finished');
+    clearTimerState();
 
     // Play notification sound and vibrate
     playNotification();
@@ -380,6 +535,7 @@ function finishSession() {
     sessionStartTime = null;
     pauseStartTime = null;
     totalPausedTime = 0;
+    targetEndTime = null;
 
     // Reset task name
     taskInput.value = '';
@@ -397,6 +553,7 @@ function finishSession() {
 
     // Save and render
     saveState();
+    clearTimerState();
     renderHistory();
 }
 
@@ -479,6 +636,7 @@ function resetTimer() {
         return;
     }
 
+    targetEndTime = null;
     remainingSeconds = totalSeconds;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
@@ -488,6 +646,7 @@ function resetTimer() {
     taskInput.disabled = false;
     updateDisplay();
     updateProgress();
+    clearTimerState();
 }
 
 // Event Listeners
@@ -601,6 +760,21 @@ function setupEventListeners() {
     historyModal.addEventListener('click', (e) => {
         if (e.target === historyModal) {
             hideHistoryDetailModal();
+        }
+    });
+
+    // Handle visibility change (returning from background)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && isRunning && targetEndTime) {
+            // Immediately update timer when returning to foreground
+            const now = Date.now();
+            remainingSeconds = Math.max(0, Math.ceil((targetEndTime - now) / 1000));
+            updateDisplay();
+            updateProgress();
+
+            if (remainingSeconds <= 0) {
+                finishTimer();
+            }
         }
     });
 }
