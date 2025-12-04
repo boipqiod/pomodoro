@@ -45,25 +45,9 @@
             <button class="preset" data-time="60">60분</button>
         </div>
 
-        <!-- Task Backlog -->
-        <div class="backlog-section">
-            <div class="backlog-header">
-                <h3 class="backlog-title">할 일 목록</h3>
-            </div>
-            <div class="backlog-list" id="backlogList">
-                <div class="backlog-empty">등록된 작업이 없습니다</div>
-            </div>
-            <div class="backlog-add">
-                <input type="text" id="backlogTaskInput" class="backlog-task-input" placeholder="작업명..." maxlength="50">
-                <select id="backlogTimeSelect" class="backlog-time-select">
-                    <option value="5">5분</option>
-                    <option value="15">15분</option>
-                    <option value="25" selected>25분</option>
-                    <option value="45">45분</option>
-                    <option value="60">60분</option>
-                </select>
-                <button id="backlogAddBtn" class="backlog-add-btn">추가</button>
-            </div>
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn-action" id="viewBacklogBtn">할 일 목록</button>
         </div>
 
         <!-- Today's Work History -->
@@ -74,6 +58,32 @@
             </div>
             <div class="history-list" id="historyList">
                 <div class="history-empty">아직 완료된 작업이 없습니다</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backlog Modal -->
+    <div class="modal-overlay" id="backlogModal">
+        <div class="modal modal-backlog">
+            <div class="modal-header">
+                <h2>할 일 목록</h2>
+                <button class="modal-close" id="closeBacklogModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="backlog-list" id="backlogList">
+                    <div class="backlog-empty">등록된 작업이 없습니다</div>
+                </div>
+                <div class="backlog-add">
+                    <input type="text" id="backlogTaskInput" class="backlog-task-input" placeholder="작업명..." maxlength="50">
+                    <select id="backlogTimeSelect" class="backlog-time-select">
+                        <option value="5">5분</option>
+                        <option value="15">15분</option>
+                        <option value="25" selected>25분</option>
+                        <option value="45">45분</option>
+                        <option value="60">60분</option>
+                    </select>
+                    <button id="backlogAddBtn" class="backlog-add-btn">추가</button>
+                </div>
             </div>
         </div>
     </div>

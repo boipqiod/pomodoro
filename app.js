@@ -10,10 +10,13 @@ const presets = document.querySelectorAll('.preset');
 const historyList = document.getElementById('historyList');
 
 // Backlog Elements
+const backlogModal = document.getElementById('backlogModal');
 const backlogList = document.getElementById('backlogList');
 const backlogTaskInput = document.getElementById('backlogTaskInput');
 const backlogTimeSelect = document.getElementById('backlogTimeSelect');
 const backlogAddBtn = document.getElementById('backlogAddBtn');
+const viewBacklogBtn = document.getElementById('viewBacklogBtn');
+const closeBacklogModal = document.getElementById('closeBacklogModal');
 
 // Archive Elements
 const viewArchiveBtn = document.getElementById('viewArchiveBtn');
@@ -647,12 +650,12 @@ function renderBacklog() {
         </div>
     `).join('');
 
-    // Add click listeners for starting task
+    // Add click listeners for setting task (not starting)
     backlogList.querySelectorAll('.backlog-item').forEach(el => {
         el.addEventListener('click', (e) => {
             if (e.target.classList.contains('backlog-item-delete')) return;
             const id = parseInt(el.dataset.id, 10);
-            startBacklogTask(id);
+            setBacklogTask(id);
         });
     });
 
@@ -697,21 +700,29 @@ function deleteBacklogTask(id) {
     renderBacklog();
 }
 
-// Start a backlog task
-function startBacklogTask(id) {
+// Set timer from backlog task (does not start, just sets values)
+function setBacklogTask(id) {
     if (isRunning) {
-        if (!confirm('현재 진행 중인 타이머가 있습니다. 새 작업을 시작하시겠습니까?')) {
+        if (!confirm('현재 진행 중인 타이머가 있습니다. 새 작업으로 변경하시겠습니까?')) {
             return;
         }
         // Stop current timer without saving to history
         clearInterval(timerInterval);
         isRunning = false;
+        startBtn.textContent = '시작';
+        startBtn.classList.remove('running');
+        resetBtn.textContent = '리셋';
+        resetBtn.classList.remove('finish-early');
+        sessionStartTime = null;
+        pauseStartTime = null;
+        totalPausedTime = 0;
+        clearTimerState();
     }
 
     const task = taskBacklog.find(t => t.id === id);
     if (!task) return;
 
-    // Set timer
+    // Set timer (but don't start)
     taskInput.value = task.name;
     totalSeconds = task.minutes * 60;
     remainingSeconds = totalSeconds;
@@ -721,8 +732,8 @@ function startBacklogTask(id) {
     updateProgress();
     updatePresetHighlight();
 
-    // Start timer
-    startTimer();
+    // Close backlog modal
+    hideBacklogModal();
 }
 
 // Remove completed backlog task
@@ -733,6 +744,17 @@ function removeCompletedBacklogTask() {
         saveState();
         renderBacklog();
     }
+}
+
+// Show backlog modal
+function showBacklogModal() {
+    renderBacklog();
+    backlogModal.classList.add('active');
+}
+
+// Hide backlog modal
+function hideBacklogModal() {
+    backlogModal.classList.remove('active');
 }
 
 // Show archive modal
@@ -788,10 +810,11 @@ function renderArchive() {
                 <div class="archive-date-header">${dateLabel} (${formatDuration(totalWork)})</div>
                 <div class="archive-items">
                     ${items.map(item => `
-                        <div class="archive-item">
+                        <div class="archive-item" data-id="${item.id}">
                             <div class="archive-item-header">
                                 <span class="archive-item-name">${escapeHtml(item.taskName)}</span>
                                 <span class="archive-item-duration">${formatDuration(item.workTime)}</span>
+                                <button class="archive-item-delete" data-id="${item.id}">&times;</button>
                             </div>
                             <div class="archive-item-time">${formatDateTime(item.startTime)} ~ ${formatDateTime(item.endTime)}</div>
                         </div>
@@ -800,6 +823,23 @@ function renderArchive() {
             </div>
         `;
     }).join('');
+
+    // Add delete event listeners
+    archiveList.querySelectorAll('.archive-item-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = parseInt(btn.dataset.id, 10);
+            deleteHistoryItem(id);
+        });
+    });
+}
+
+// Delete individual history item
+function deleteHistoryItem(id) {
+    workHistory = workHistory.filter(item => item.id !== id);
+    saveState();
+    renderArchive();
+    renderTodayHistory();
 }
 
 // Clear all history
@@ -980,10 +1020,18 @@ function setupEventListeners() {
     closeHistoryModal.addEventListener('click', hideHistoryDetailModal);
 
     // Backlog events
+    viewBacklogBtn.addEventListener('click', showBacklogModal);
+    closeBacklogModal.addEventListener('click', hideBacklogModal);
     backlogAddBtn.addEventListener('click', addBacklogTask);
     backlogTaskInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             addBacklogTask();
+        }
+    });
+
+    backlogModal.addEventListener('click', (e) => {
+        if (e.target === backlogModal) {
+            hideBacklogModal();
         }
     });
 
