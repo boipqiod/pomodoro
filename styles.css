@@ -208,6 +208,31 @@ body {
     border-color: #e94560;
 }
 
+/* Action Buttons */
+.action-buttons {
+    margin-top: 25px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-action {
+    padding: 12px 24px;
+    font-size: 0.95rem;
+    background: rgba(52, 152, 219, 0.2);
+    border: 1px solid rgba(52, 152, 219, 0.4);
+    border-radius: 25px;
+    color: #3498db;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn-action:hover {
+    background: rgba(52, 152, 219, 0.35);
+    transform: scale(1.02);
+}
+
 /* Animations */
 @keyframes pulse {
     0%, 100% { opacity: 1; }
@@ -621,6 +646,25 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* Backlog Modal */
+.modal-backlog {
+    max-width: 400px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-backlog .modal-body {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.modal-backlog .backlog-list {
+    margin-bottom: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 /* Archive Modal */
 .modal-archive {
     max-width: 400px;
@@ -664,6 +708,7 @@ body {
     background: rgba(255, 255, 255, 0.06);
     border-radius: 8px;
     padding: 10px 12px;
+    position: relative;
 }
 
 .archive-item-header {
@@ -671,6 +716,21 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 4px;
+}
+
+.archive-item-delete {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    margin-left: 8px;
+    transition: color 0.2s ease;
+}
+
+.archive-item-delete:hover {
+    color: #e74c3c;
 }
 
 .archive-item-name {
