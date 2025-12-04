@@ -44,6 +44,66 @@
             <button class="preset" data-time="45">45분</button>
             <button class="preset" data-time="60">60분</button>
         </div>
+
+        <!-- Work History -->
+        <div class="history-section">
+            <h3 class="history-title">작업 기록</h3>
+            <div class="history-list" id="historyList">
+                <div class="history-empty">아직 완료된 작업이 없습니다</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timer Complete Modal -->
+    <div class="modal-overlay" id="timerModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>타이머 완료!</h2>
+                <p class="modal-task-name" id="modalTaskName"></p>
+            </div>
+            <div class="modal-body">
+                <p class="modal-message">시간을 추가하시겠습니까?</p>
+                <div class="time-extend-bar">
+                    <button class="extend-btn" data-extend="5">+5분</button>
+                    <button class="extend-btn" data-extend="10">+10분</button>
+                    <button class="extend-btn" data-extend="15">+15분</button>
+                    <button class="extend-btn" data-extend="20">+20분</button>
+                    <button class="extend-btn" data-extend="25">+25분</button>
+                    <button class="extend-btn" data-extend="30">+30분</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-finish" id="finishBtn">종료</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Detail Modal -->
+    <div class="modal-overlay" id="historyModal">
+        <div class="modal modal-detail">
+            <div class="modal-header">
+                <h2 id="detailTaskName">작업명</h2>
+                <button class="modal-close" id="closeHistoryModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-row">
+                    <span class="detail-label">시작 시간</span>
+                    <span class="detail-value" id="detailStartTime">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">종료 시간</span>
+                    <span class="detail-value" id="detailEndTime">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">일시정지 시간</span>
+                    <span class="detail-value" id="detailPauseTime">-</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">순 작업 시간</span>
+                    <span class="detail-value" id="detailWorkTime">-</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
