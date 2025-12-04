@@ -7,6 +7,20 @@ const handleEl = document.getElementById('handle');
 const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
 const presets = document.querySelectorAll('.preset');
+const historyList = document.getElementById('historyList');
+
+// Modal Elements
+const timerModal = document.getElementById('timerModal');
+const historyModal = document.getElementById('historyModal');
+const modalTaskName = document.getElementById('modalTaskName');
+const finishBtn = document.getElementById('finishBtn');
+const extendBtns = document.querySelectorAll('.extend-btn');
+const closeHistoryModal = document.getElementById('closeHistoryModal');
+const detailTaskName = document.getElementById('detailTaskName');
+const detailStartTime = document.getElementById('detailStartTime');
+const detailEndTime = document.getElementById('detailEndTime');
+const detailPauseTime = document.getElementById('detailPauseTime');
+const detailWorkTime = document.getElementById('detailWorkTime');
 
 // Constants
 const MAX_TIME = 60 * 60; // 60 minutes in seconds
@@ -20,6 +34,12 @@ let isRunning = false;
 let timerInterval = null;
 let isDragging = false;
 
+// Session tracking
+let sessionStartTime = null;
+let pauseStartTime = null;
+let totalPausedTime = 0; // Total paused time in milliseconds
+let workHistory = [];
+
 // Initialize
 function init() {
     updateClock();
@@ -30,6 +50,7 @@ function init() {
     registerServiceWorker();
     setupEventListeners();
     loadState();
+    renderHistory();
 }
 
 // Load saved state from localStorage
@@ -41,6 +62,9 @@ function loadState() {
             if (state.taskName) {
                 taskInput.value = state.taskName;
             }
+            if (state.workHistory) {
+                workHistory = state.workHistory;
+            }
         }
     } catch (e) {
         console.log('Failed to load state:', e);
@@ -51,7 +75,8 @@ function loadState() {
 function saveState() {
     try {
         localStorage.setItem('pomodoroState', JSON.stringify({
-            taskName: taskInput.value
+            taskName: taskInput.value,
+            workHistory: workHistory
         }));
     } catch (e) {
         console.log('Failed to save state:', e);
@@ -81,6 +106,41 @@ function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+// Format milliseconds to readable duration
+function formatDuration(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}시간 ${minutes}분 ${seconds}초`;
+    } else if (minutes > 0) {
+        return `${minutes}분 ${seconds}초`;
+    } else {
+        return `${seconds}초`;
+    }
+}
+
+// Format date to readable string
+function formatDateTime(date) {
+    const d = new Date(date);
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+}
+
+// Format date to short date string
+function formatDate(date) {
+    const d = new Date(date);
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${month}/${day} ${hours}:${minutes}`;
 }
 
 // Parse MM:SS to seconds
@@ -183,10 +243,23 @@ function toggleTimer() {
 function startTimer() {
     if (remainingSeconds <= 0) return;
 
+    // If this is a fresh start (not resuming from pause)
+    if (sessionStartTime === null) {
+        sessionStartTime = new Date();
+        totalPausedTime = 0;
+    } else if (pauseStartTime !== null) {
+        // Resuming from pause - add paused duration
+        totalPausedTime += Date.now() - pauseStartTime;
+        pauseStartTime = null;
+    }
+
     isRunning = true;
     startBtn.textContent = '일시정지';
     startBtn.classList.add('running');
     progressEl.classList.remove('finished');
+
+    // Disable task input while running
+    taskInput.disabled = true;
 
     timerInterval = setInterval(() => {
         remainingSeconds--;
@@ -201,6 +274,7 @@ function startTimer() {
 
 function pauseTimer() {
     isRunning = false;
+    pauseStartTime = Date.now();
     startBtn.textContent = '계속';
     startBtn.classList.remove('running');
     clearInterval(timerInterval);
@@ -218,6 +292,141 @@ function finishTimer() {
 
     // Show notification if permitted
     showNotification();
+
+    // Show timer complete modal
+    showTimerModal();
+}
+
+function showTimerModal() {
+    const taskName = taskInput.value.trim() || '이름 없는 작업';
+    modalTaskName.textContent = taskName;
+    timerModal.classList.add('active');
+}
+
+function hideTimerModal() {
+    timerModal.classList.remove('active');
+}
+
+function showHistoryDetailModal(historyItem) {
+    detailTaskName.textContent = historyItem.taskName;
+    detailStartTime.textContent = formatDateTime(historyItem.startTime);
+    detailEndTime.textContent = formatDateTime(historyItem.endTime);
+    detailPauseTime.textContent = formatDuration(historyItem.pausedTime);
+    detailWorkTime.textContent = formatDuration(historyItem.workTime);
+    historyModal.classList.add('active');
+}
+
+function hideHistoryDetailModal() {
+    historyModal.classList.remove('active');
+}
+
+function extendTime(minutes) {
+    hideTimerModal();
+
+    // Add time
+    remainingSeconds = minutes * 60;
+    totalSeconds = remainingSeconds;
+
+    // Continue session
+    updateDisplay();
+    updateProgress();
+    updatePresetHighlight();
+
+    // Resume if was paused
+    if (pauseStartTime !== null) {
+        totalPausedTime += Date.now() - pauseStartTime;
+        pauseStartTime = null;
+    }
+
+    startTimer();
+}
+
+function finishSession() {
+    hideTimerModal();
+
+    const endTime = new Date();
+
+    // Calculate final paused time if currently paused
+    let finalPausedTime = totalPausedTime;
+    if (pauseStartTime !== null) {
+        finalPausedTime += Date.now() - pauseStartTime;
+    }
+
+    // Calculate work time
+    const totalElapsed = endTime - sessionStartTime;
+    const workTime = totalElapsed - finalPausedTime;
+
+    // Create history entry
+    const historyEntry = {
+        id: Date.now(),
+        taskName: taskInput.value.trim() || '이름 없는 작업',
+        startTime: sessionStartTime.toISOString(),
+        endTime: endTime.toISOString(),
+        pausedTime: finalPausedTime,
+        workTime: Math.max(0, workTime)
+    };
+
+    // Add to history
+    workHistory.unshift(historyEntry);
+
+    // Keep only last 50 entries
+    if (workHistory.length > 50) {
+        workHistory = workHistory.slice(0, 50);
+    }
+
+    // Reset session
+    sessionStartTime = null;
+    pauseStartTime = null;
+    totalPausedTime = 0;
+
+    // Reset task name
+    taskInput.value = '';
+    taskInput.disabled = false;
+
+    // Reset timer
+    remainingSeconds = totalSeconds;
+    startBtn.textContent = '시작';
+    startBtn.classList.remove('running');
+    progressEl.classList.remove('finished');
+    updateDisplay();
+    updateProgress();
+
+    // Save and render
+    saveState();
+    renderHistory();
+}
+
+function renderHistory() {
+    if (workHistory.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">아직 완료된 작업이 없습니다</div>';
+        return;
+    }
+
+    historyList.innerHTML = workHistory.map((item, index) => `
+        <div class="history-item" data-index="${index}">
+            <div class="history-item-header">
+                <span class="history-item-name">${escapeHtml(item.taskName)}</span>
+                <span class="history-item-duration">${formatDuration(item.workTime)}</span>
+            </div>
+            <div class="history-item-time">
+                ${formatDate(item.startTime)} ~ ${formatDateTime(item.endTime)}
+            </div>
+        </div>
+    `).join('');
+
+    // Add click listeners
+    historyList.querySelectorAll('.history-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const index = parseInt(el.dataset.index, 10);
+            showHistoryDetailModal(workHistory[index]);
+        });
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function showNotification() {
@@ -259,10 +468,18 @@ function playNotification() {
 
 function resetTimer() {
     pauseTimer();
+
+    // If session was in progress, finish it
+    if (sessionStartTime !== null) {
+        finishSession();
+        return;
+    }
+
     remainingSeconds = totalSeconds;
     startBtn.textContent = '시작';
     startBtn.classList.remove('running');
     progressEl.classList.remove('finished');
+    taskInput.disabled = false;
     updateDisplay();
     updateProgress();
 }
@@ -352,6 +569,34 @@ function setupEventListeners() {
             Notification.requestPermission();
         }
     }, { once: true });
+
+    // Modal events - extend buttons
+    extendBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const minutes = parseInt(btn.dataset.extend, 10);
+            extendTime(minutes);
+        });
+    });
+
+    // Modal events - finish button
+    finishBtn.addEventListener('click', finishSession);
+
+    // Close history modal
+    closeHistoryModal.addEventListener('click', hideHistoryDetailModal);
+
+    // Close modals on overlay click
+    timerModal.addEventListener('click', (e) => {
+        if (e.target === timerModal) {
+            // Don't allow closing timer modal by clicking overlay
+            // User must choose extend or finish
+        }
+    });
+
+    historyModal.addEventListener('click', (e) => {
+        if (e.target === historyModal) {
+            hideHistoryDetailModal();
+        }
+    });
 }
 
 function startDrag(e) {
