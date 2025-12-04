@@ -8,6 +8,7 @@ const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
 const presets = document.querySelectorAll('.preset');
 const historyList = document.getElementById('historyList');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
 // Modal Elements
 const timerModal = document.getElementById('timerModal');
@@ -584,6 +585,16 @@ function renderHistory() {
     });
 }
 
+function clearHistory() {
+    if (workHistory.length === 0) return;
+
+    if (confirm('모든 작업 기록을 삭제하시겠습니까?')) {
+        workHistory = [];
+        saveState();
+        renderHistory();
+    }
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -748,6 +759,9 @@ function setupEventListeners() {
 
     // Close history modal
     closeHistoryModal.addEventListener('click', hideHistoryDetailModal);
+
+    // Clear history button
+    clearHistoryBtn.addEventListener('click', clearHistory);
 
     // Close modals on overlay click
     timerModal.addEventListener('click', (e) => {

@@ -10,10 +10,10 @@ body {
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center;
     color: #fff;
     -webkit-user-select: none;
     user-select: none;
+    padding: 40px 0;
 }
 
 .container {
@@ -232,17 +232,36 @@ body {
     text-align: left;
 }
 
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
 .history-title {
     font-size: 1rem;
     font-weight: 500;
     opacity: 0.7;
-    margin-bottom: 15px;
-    text-align: center;
+    margin: 0;
+}
+
+.btn-clear-history {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    background: rgba(231, 76, 60, 0.2);
+    border: 1px solid rgba(231, 76, 60, 0.4);
+    border-radius: 15px;
+    color: #e74c3c;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-clear-history:hover {
+    background: rgba(231, 76, 60, 0.35);
 }
 
 .history-list {
-    max-height: 300px;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 10px;
