@@ -226,9 +226,144 @@ body {
     background: rgba(255, 255, 255, 0.04);
 }
 
+/* Backlog Section */
+.backlog-section {
+    margin-top: 40px;
+    text-align: left;
+}
+
+.backlog-header {
+    margin-bottom: 15px;
+}
+
+.backlog-title {
+    font-size: 1rem;
+    font-weight: 500;
+    opacity: 0.7;
+    margin: 0;
+}
+
+.backlog-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.backlog-empty {
+    text-align: center;
+    opacity: 0.4;
+    padding: 15px;
+    font-size: 0.9rem;
+}
+
+.backlog-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(52, 152, 219, 0.15);
+    border: 1px solid rgba(52, 152, 219, 0.3);
+    border-radius: 12px;
+    padding: 12px 15px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.backlog-item:hover {
+    background: rgba(52, 152, 219, 0.25);
+    transform: translateY(-2px);
+}
+
+.backlog-item-name {
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: #fff;
+    flex: 1;
+    text-align: left;
+}
+
+.backlog-item-time {
+    font-size: 0.85rem;
+    color: #3498db;
+    font-weight: 500;
+    margin-left: 10px;
+}
+
+.backlog-item-delete {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0 5px;
+    margin-left: 10px;
+    transition: color 0.2s ease;
+}
+
+.backlog-item-delete:hover {
+    color: #e74c3c;
+}
+
+.backlog-add {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.backlog-task-input {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #fff;
+    outline: none;
+}
+
+.backlog-task-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.backlog-task-input:focus {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.backlog-time-select {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    color: #fff;
+    outline: none;
+    cursor: pointer;
+}
+
+.backlog-time-select option {
+    background: #1a1a2e;
+    color: #fff;
+}
+
+.backlog-add-btn {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    background: rgba(52, 152, 219, 0.3);
+    border: 1px solid rgba(52, 152, 219, 0.5);
+    border-radius: 8px;
+    color: #3498db;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.backlog-add-btn:hover {
+    background: rgba(52, 152, 219, 0.45);
+}
+
 /* History Section */
 .history-section {
-    margin-top: 40px;
+    margin-top: 30px;
     text-align: left;
 }
 
@@ -259,6 +394,21 @@ body {
 
 .btn-clear-history:hover {
     background: rgba(231, 76, 60, 0.35);
+}
+
+.btn-view-archive {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-view-archive:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .history-list {
@@ -471,6 +621,92 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* Archive Modal */
+.modal-archive {
+    max-width: 400px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-archive .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.archive-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.archive-date-group {
+    margin-bottom: 10px;
+}
+
+.archive-date-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e94560;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+}
+
+.archive-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.archive-item {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.archive-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.archive-item-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.archive-item-duration {
+    font-size: 0.8rem;
+    color: #e94560;
+}
+
+.archive-item-time {
+    font-size: 0.75rem;
+    opacity: 0.6;
+}
+
+.btn-danger {
+    background: rgba(231, 76, 60, 0.2);
+    border: 1px solid rgba(231, 76, 60, 0.4);
+    color: #e74c3c;
+    padding: 12px 30px;
+    font-size: 1rem;
+}
+
+.btn-danger:hover {
+    background: rgba(231, 76, 60, 0.35);
+}
+
+.archive-empty {
+    text-align: center;
+    opacity: 0.4;
+    padding: 30px;
+    font-size: 0.9rem;
+}
+
 /* Responsive */
 @media (max-width: 360px) {
     .timer-container {
@@ -493,5 +729,13 @@ body {
 
     .time-extend-bar {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .backlog-add {
+        flex-wrap: wrap;
+    }
+
+    .backlog-task-input {
+        width: 100%;
     }
 }

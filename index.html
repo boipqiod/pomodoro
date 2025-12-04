@@ -45,14 +45,51 @@
             <button class="preset" data-time="60">60분</button>
         </div>
 
-        <!-- Work History -->
+        <!-- Task Backlog -->
+        <div class="backlog-section">
+            <div class="backlog-header">
+                <h3 class="backlog-title">할 일 목록</h3>
+            </div>
+            <div class="backlog-list" id="backlogList">
+                <div class="backlog-empty">등록된 작업이 없습니다</div>
+            </div>
+            <div class="backlog-add">
+                <input type="text" id="backlogTaskInput" class="backlog-task-input" placeholder="작업명..." maxlength="50">
+                <select id="backlogTimeSelect" class="backlog-time-select">
+                    <option value="5">5분</option>
+                    <option value="15">15분</option>
+                    <option value="25" selected>25분</option>
+                    <option value="45">45분</option>
+                    <option value="60">60분</option>
+                </select>
+                <button id="backlogAddBtn" class="backlog-add-btn">추가</button>
+            </div>
+        </div>
+
+        <!-- Today's Work History -->
         <div class="history-section">
             <div class="history-header">
-                <h3 class="history-title">작업 기록</h3>
-                <button class="btn-clear-history" id="clearHistoryBtn">초기화</button>
+                <h3 class="history-title">오늘 완료</h3>
+                <button class="btn-view-archive" id="viewArchiveBtn">전체 기록</button>
             </div>
             <div class="history-list" id="historyList">
                 <div class="history-empty">아직 완료된 작업이 없습니다</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Archive Modal -->
+    <div class="modal-overlay" id="archiveModal">
+        <div class="modal modal-archive">
+            <div class="modal-header">
+                <h2>작업 기록</h2>
+                <button class="modal-close" id="closeArchiveModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="archive-list" id="archiveList"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="clearAllHistoryBtn">전체 삭제</button>
             </div>
         </div>
     </div>

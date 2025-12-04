@@ -8,7 +8,19 @@ const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
 const presets = document.querySelectorAll('.preset');
 const historyList = document.getElementById('historyList');
-const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+// Backlog Elements
+const backlogList = document.getElementById('backlogList');
+const backlogTaskInput = document.getElementById('backlogTaskInput');
+const backlogTimeSelect = document.getElementById('backlogTimeSelect');
+const backlogAddBtn = document.getElementById('backlogAddBtn');
+
+// Archive Elements
+const viewArchiveBtn = document.getElementById('viewArchiveBtn');
+const archiveModal = document.getElementById('archiveModal');
+const archiveList = document.getElementById('archiveList');
+const closeArchiveModal = document.getElementById('closeArchiveModal');
+const clearAllHistoryBtn = document.getElementById('clearAllHistoryBtn');
 
 // Modal Elements
 const timerModal = document.getElementById('timerModal');
@@ -41,6 +53,8 @@ let sessionStartTime = null;
 let pauseStartTime = null;
 let totalPausedTime = 0; // Total paused time in milliseconds
 let workHistory = [];
+let taskBacklog = [];
+let currentBacklogTaskId = null; // Track which backlog task is being worked on
 
 // Initialize
 function init() {
@@ -49,7 +63,8 @@ function init() {
     registerServiceWorker();
     setupEventListeners();
     loadState();
-    renderHistory();
+    renderBacklog();
+    renderTodayHistory();
 
     // Try to restore timer state from localStorage
     const timerState = loadTimerState();
@@ -123,6 +138,9 @@ function loadState() {
             if (state.workHistory) {
                 workHistory = state.workHistory;
             }
+            if (state.taskBacklog) {
+                taskBacklog = state.taskBacklog;
+            }
         }
     } catch (e) {
         console.log('Failed to load state:', e);
@@ -134,7 +152,8 @@ function saveState() {
     try {
         localStorage.setItem('pomodoroState', JSON.stringify({
             taskName: taskInput.value,
-            workHistory: workHistory
+            workHistory: workHistory,
+            taskBacklog: taskBacklog
         }));
     } catch (e) {
         console.log('Failed to save state:', e);
@@ -152,7 +171,8 @@ function saveTimerState() {
             sessionStartTime: sessionStartTime ? sessionStartTime.toISOString() : null,
             pauseStartTime: pauseStartTime,
             totalPausedTime: totalPausedTime,
-            taskName: taskInput.value
+            taskName: taskInput.value,
+            currentBacklogTaskId: currentBacklogTaskId
         }));
     } catch (e) {
         console.log('Failed to save timer state:', e);
@@ -179,6 +199,7 @@ function loadTimerState() {
                 remainingSeconds = remaining;
                 sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
                 totalPausedTime = state.totalPausedTime || 0;
+                currentBacklogTaskId = state.currentBacklogTaskId || null;
 
                 if (state.taskName) {
                     taskInput.value = state.taskName;
@@ -191,6 +212,7 @@ function loadTimerState() {
                 remainingSeconds = 0;
                 sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
                 totalPausedTime = state.totalPausedTime || 0;
+                currentBacklogTaskId = state.currentBacklogTaskId || null;
 
                 if (state.taskName) {
                     taskInput.value = state.taskName;
@@ -205,6 +227,7 @@ function loadTimerState() {
             sessionStartTime = state.sessionStartTime ? new Date(state.sessionStartTime) : null;
             pauseStartTime = state.pauseStartTime;
             totalPausedTime = state.totalPausedTime || 0;
+            currentBacklogTaskId = state.currentBacklogTaskId || null;
 
             if (state.taskName) {
                 taskInput.value = state.taskName;
@@ -527,9 +550,15 @@ function finishSession() {
     // Add to history
     workHistory.unshift(historyEntry);
 
-    // Keep only last 50 entries
-    if (workHistory.length > 50) {
-        workHistory = workHistory.slice(0, 50);
+    // Keep only last 100 entries
+    if (workHistory.length > 100) {
+        workHistory = workHistory.slice(0, 100);
+    }
+
+    // Remove completed backlog task
+    if (currentBacklogTaskId) {
+        taskBacklog = taskBacklog.filter(t => t.id !== currentBacklogTaskId);
+        currentBacklogTaskId = null;
     }
 
     // Reset session
@@ -555,26 +584,44 @@ function finishSession() {
     // Save and render
     saveState();
     clearTimerState();
-    renderHistory();
+    renderBacklog();
+    renderTodayHistory();
 }
 
-function renderHistory() {
-    if (workHistory.length === 0) {
-        historyList.innerHTML = '<div class="history-empty">아직 완료된 작업이 없습니다</div>';
+// Get today's date string (YYYY-MM-DD)
+function getDateString(date) {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Get today's history items
+function getTodayHistory() {
+    const today = getDateString(new Date());
+    return workHistory.filter(item => getDateString(item.startTime) === today);
+}
+
+// Render today's completed tasks
+function renderTodayHistory() {
+    const todayItems = getTodayHistory();
+
+    if (todayItems.length === 0) {
+        historyList.innerHTML = '<div class="history-empty">오늘 완료된 작업이 없습니다</div>';
         return;
     }
 
-    historyList.innerHTML = workHistory.map((item, index) => `
+    historyList.innerHTML = todayItems.map((item) => {
+        const index = workHistory.findIndex(h => h.id === item.id);
+        return `
         <div class="history-item" data-index="${index}">
             <div class="history-item-header">
                 <span class="history-item-name">${escapeHtml(item.taskName)}</span>
                 <span class="history-item-duration">${formatDuration(item.workTime)}</span>
             </div>
             <div class="history-item-time">
-                ${formatDate(item.startTime)} ~ ${formatDateTime(item.endTime)}
+                ${formatDateTime(item.startTime)} ~ ${formatDateTime(item.endTime)}
             </div>
         </div>
-    `).join('');
+    `}).join('');
 
     // Add click listeners
     historyList.querySelectorAll('.history-item').forEach(el => {
@@ -585,13 +632,185 @@ function renderHistory() {
     });
 }
 
-function clearHistory() {
+// Render backlog list
+function renderBacklog() {
+    if (taskBacklog.length === 0) {
+        backlogList.innerHTML = '<div class="backlog-empty">등록된 작업이 없습니다</div>';
+        return;
+    }
+
+    backlogList.innerHTML = taskBacklog.map((item) => `
+        <div class="backlog-item" data-id="${item.id}">
+            <span class="backlog-item-name">${escapeHtml(item.name)}</span>
+            <span class="backlog-item-time">${item.minutes}분</span>
+            <button class="backlog-item-delete" data-id="${item.id}">&times;</button>
+        </div>
+    `).join('');
+
+    // Add click listeners for starting task
+    backlogList.querySelectorAll('.backlog-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (e.target.classList.contains('backlog-item-delete')) return;
+            const id = parseInt(el.dataset.id, 10);
+            startBacklogTask(id);
+        });
+    });
+
+    // Add click listeners for delete buttons
+    backlogList.querySelectorAll('.backlog-item-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = parseInt(btn.dataset.id, 10);
+            deleteBacklogTask(id);
+        });
+    });
+}
+
+// Add task to backlog
+function addBacklogTask() {
+    const name = backlogTaskInput.value.trim();
+    const minutes = parseInt(backlogTimeSelect.value, 10);
+
+    if (!name) {
+        backlogTaskInput.focus();
+        return;
+    }
+
+    const task = {
+        id: Date.now(),
+        name: name,
+        minutes: minutes
+    };
+
+    taskBacklog.push(task);
+    saveState();
+    renderBacklog();
+
+    // Clear input
+    backlogTaskInput.value = '';
+}
+
+// Delete task from backlog
+function deleteBacklogTask(id) {
+    taskBacklog = taskBacklog.filter(t => t.id !== id);
+    saveState();
+    renderBacklog();
+}
+
+// Start a backlog task
+function startBacklogTask(id) {
+    if (isRunning) {
+        if (!confirm('현재 진행 중인 타이머가 있습니다. 새 작업을 시작하시겠습니까?')) {
+            return;
+        }
+        // Stop current timer without saving to history
+        clearInterval(timerInterval);
+        isRunning = false;
+    }
+
+    const task = taskBacklog.find(t => t.id === id);
+    if (!task) return;
+
+    // Set timer
+    taskInput.value = task.name;
+    totalSeconds = task.minutes * 60;
+    remainingSeconds = totalSeconds;
+    currentBacklogTaskId = id;
+
+    updateDisplay();
+    updateProgress();
+    updatePresetHighlight();
+
+    // Start timer
+    startTimer();
+}
+
+// Remove completed backlog task
+function removeCompletedBacklogTask() {
+    if (currentBacklogTaskId) {
+        taskBacklog = taskBacklog.filter(t => t.id !== currentBacklogTaskId);
+        currentBacklogTaskId = null;
+        saveState();
+        renderBacklog();
+    }
+}
+
+// Show archive modal
+function showArchiveModal() {
+    renderArchive();
+    archiveModal.classList.add('active');
+}
+
+// Hide archive modal
+function hideArchiveModal() {
+    archiveModal.classList.remove('active');
+}
+
+// Render archive (grouped by date)
+function renderArchive() {
+    if (workHistory.length === 0) {
+        archiveList.innerHTML = '<div class="archive-empty">작업 기록이 없습니다</div>';
+        return;
+    }
+
+    // Group by date
+    const grouped = {};
+    workHistory.forEach(item => {
+        const dateStr = getDateString(item.startTime);
+        if (!grouped[dateStr]) {
+            grouped[dateStr] = [];
+        }
+        grouped[dateStr].push(item);
+    });
+
+    // Sort dates descending
+    const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+    archiveList.innerHTML = sortedDates.map(dateStr => {
+        const items = grouped[dateStr];
+        const d = new Date(dateStr);
+        const today = getDateString(new Date());
+        const yesterday = getDateString(new Date(Date.now() - 86400000));
+
+        let dateLabel;
+        if (dateStr === today) {
+            dateLabel = '오늘';
+        } else if (dateStr === yesterday) {
+            dateLabel = '어제';
+        } else {
+            dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+        }
+
+        const totalWork = items.reduce((sum, item) => sum + item.workTime, 0);
+
+        return `
+            <div class="archive-date-group">
+                <div class="archive-date-header">${dateLabel} (${formatDuration(totalWork)})</div>
+                <div class="archive-items">
+                    ${items.map(item => `
+                        <div class="archive-item">
+                            <div class="archive-item-header">
+                                <span class="archive-item-name">${escapeHtml(item.taskName)}</span>
+                                <span class="archive-item-duration">${formatDuration(item.workTime)}</span>
+                            </div>
+                            <div class="archive-item-time">${formatDateTime(item.startTime)} ~ ${formatDateTime(item.endTime)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Clear all history
+function clearAllHistory() {
     if (workHistory.length === 0) return;
 
     if (confirm('모든 작업 기록을 삭제하시겠습니까?')) {
         workHistory = [];
         saveState();
-        renderHistory();
+        renderTodayHistory();
+        renderArchive();
     }
 }
 
@@ -760,8 +979,24 @@ function setupEventListeners() {
     // Close history modal
     closeHistoryModal.addEventListener('click', hideHistoryDetailModal);
 
-    // Clear history button
-    clearHistoryBtn.addEventListener('click', clearHistory);
+    // Backlog events
+    backlogAddBtn.addEventListener('click', addBacklogTask);
+    backlogTaskInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            addBacklogTask();
+        }
+    });
+
+    // Archive events
+    viewArchiveBtn.addEventListener('click', showArchiveModal);
+    closeArchiveModal.addEventListener('click', hideArchiveModal);
+    clearAllHistoryBtn.addEventListener('click', clearAllHistory);
+
+    archiveModal.addEventListener('click', (e) => {
+        if (e.target === archiveModal) {
+            hideArchiveModal();
+        }
+    });
 
     // Close modals on overlay click
     timerModal.addEventListener('click', (e) => {
